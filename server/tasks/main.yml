@@ -1,0 +1,28 @@
+---
+    - name: install mysql and dependencies
+      apt: pkg=$item state=present
+      with_items:
+        - mysql-server
+        - mysql-client
+        - python-mysqldb
+
+    - name: Start the MySQL service
+      action: service name=mysql state=started
+
+    # 'localhost' needs to be the last item for idempotency, see
+    # http://ansible.cc/docs/modules.html#mysql-user
+    - name: update mysql root password for all root accounts
+      mysql_user: name=root host=$item password=${dbmysql.root_password} login_password="" login_user=root
+      with_items: ${dbmysql.hosts_access}
+
+    - name: copy .my.cnf file with root password credentials
+      template: src=root/.my.cnf.j2 dest=/root/.my.cnf owner=root mode=0600
+
+    - name: copy mysql config file to allow remote connections
+      template: src=mysqld_remote_connection.cnf.j2 dest=/etc/mysql/conf.d/mysqld_remote_connection.cnf owner=root mode=0600      
+
+    - name: remove the test database
+      mysql_db: name=test state=absent login_password=${dbmysql.root_password} login_user=root
+
+    - name: restart MySQL Database
+      action: service name=mysql state=restarted
